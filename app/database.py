@@ -1,8 +1,8 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 
@@ -12,7 +12,9 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(
     DATABASE_URL,
     echo=False,  # Set to False in production
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    # Add this line to explicitly specify the PostgreSQL dialect
+    connect_args={"options": "-c timezone=utc"}
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
