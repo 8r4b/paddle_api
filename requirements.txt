@@ -3,5 +3,6 @@ uvicorn
 python-jose[cryptography]
 passlib[bcrypt]
 sqlalchemy
-pymysql
+psycopg2-binary
 openai
+python-dotenv

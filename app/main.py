@@ -25,11 +25,6 @@ def read_root():
             "analyze": "/sentiment/analyze"
         }
     }
-
-@app.get("/health")
-def health_check():
-    return {"status": "healthy"}
-
 # Include routers
 app.include_router(users_router, prefix="/users", tags=["users"])
 app.include_router(sentiment_router, prefix="/sentiment", tags=["sentiment"])

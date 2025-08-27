@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from app import models, auth, database
@@ -29,7 +28,9 @@ def send_verification_email(email: str, token: str):
     from_email = smtp_user
     to_email = email
     subject = "Verify your email"
-    verify_link = f"https://yourdomain.com/users/verify?token={token}"
+    # Get the API domain from environment variable
+    api_domain = os.getenv("API_DOMAIN", "https://yourdomain.com")  # Default value if not set
+    verify_link = f"{api_domain}/users/verify?token={token}"
     body = f"Please verify your email by clicking the following link: {verify_link}"
     msg = MIMEMultipart()
     msg["From"] = from_email
@@ -88,7 +89,17 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             headers={"WWW-Authenticate": "Bearer"},
         )
     if not user.is_verified:
-        raise HTTPException(status_code=403, detail="Email not verified. Please check your inbox.")
+        # Resend verification email
+        verification_token = secrets.token_urlsafe(32)
+        user.verification_token = verification_token
+        db.commit()
+        background_tasks = BackgroundTasks()  # Create a BackgroundTasks instance
+        background_tasks.add_task(send_verification_email, user.email, verification_token)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email not verified. A new verification email has been sent.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     access_token = auth.create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token type": "bearer"}
 
