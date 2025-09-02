@@ -2,13 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from app import models, auth, database
 from app.models import UserCreate, UserRead
-from app.dependencies import get_current_user
 from fastapi.security import OAuth2PasswordRequestForm
 import secrets
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
+from dotenv import load_dotenv
+
+# Load environment variables at the beginning
+load_dotenv()
 
 router = APIRouter()
 
@@ -127,51 +130,35 @@ def reset_password(token: str, new_password: str, db: Session = Depends(get_db))
     db.commit()
     return {"message": "Password reset successful"}
 
-@router.get("/subscription/status")
-def get_subscription_status(current_user: models.User = Depends(get_current_user)):
-    """Get current user's subscription status"""
+@router.get("/subscription")
+def get_subscription_status(db: Session = Depends(get_db), current_user = Depends(auth.get_current_user)):
+    user = db.query(models.User).filter(models.User.username == current_user.username).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
     return {
-        "is_premium": current_user.is_premium,
-        "subscription_status": current_user.subscription_status,
-        "api_usage_count": current_user.api_usage_count,
-        "api_usage_limit": current_user.api_usage_limit
+        "is_subscribed": user.is_subscribed,
+        "subscription_status": user.subscription_status,
+        "subscription_id": user.subscription_id,
+        "subscription_plan_id": user.subscription_plan_id,
+        "subscription_start_date": user.subscription_start_date,
+        "subscription_end_date": user.subscription_end_date
     }
 
-@router.post("/subscription/create-checkout")
-def create_checkout_session(current_user: models.User = Depends(get_current_user)):
-    """Create Paddle checkout session"""
-    # You'll need to configure these with your actual Paddle product IDs
-    paddle_vendor_id = os.getenv("PADDLE_VENDOR_ID")
-    paddle_product_id = os.getenv("PADDLE_PRODUCT_ID")
+@router.get("/checkout")
+def get_checkout_url(db: Session = Depends(get_db), current_user = Depends(auth.get_current_user)):
+    import httpx
+    import json
     
-    if not paddle_vendor_id or not paddle_product_id:
-        raise HTTPException(status_code=500, detail="Paddle configuration missing")
+    # For Paddle V2, we need to use the price ID, not the product ID
+    price_id = os.getenv("PADDLE_PRICE_ID")
     
-    # Return checkout URL - you can customize this based on your pricing
-    checkout_url = f"https://buy.paddle.com/product/{paddle_product_id}"
+    # Use direct checkout link for Paddle V2
+    checkout_url = f"https://buy.paddle.com/pay/{price_id}?email={current_user.email}"
     
-    return {
-        "checkout_url": checkout_url,
-        "customer_email": current_user.email,
-        "user_id": current_user.id
-    }
-
-@router.get("/pricing")
-def get_pricing():
-    """Get available pricing plans"""
-    return {
-        "plans": [
-            {
-                "name": "Free",
-                "price": 0,
-                "api_calls": 10,
-                "features": ["Basic sentiment analysis", "Email verification"]
-            },
-            {
-                "name": "Premium",
-                "price": 9.99,
-                "api_calls": "unlimited",
-                "features": ["Unlimited sentiment analysis", "Advanced tone analysis", "Priority support"]
-            }
-        ]
-    }
+    # For sandbox testing
+    # checkout_url = f"https://sandbox-buy.paddle.com/pay/{price_id}?email={current_user.email}"
+    
+    print(f"Generated checkout URL: {checkout_url}")
+    return {"checkout_url": checkout_url}

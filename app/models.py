@@ -17,14 +17,16 @@ class User(Base):
 	is_verified = Column(Boolean, default=False)
 	verification_code = Column(String(255), nullable=True)
 	verification_token = Column(String(255), nullable=True)
-	# Paddle subscription fields
-	subscription_id = Column(String, nullable=True)
-	subscription_status = Column(String, default="inactive")
-	is_premium = Column(Boolean, default=False)
-	api_usage_count = Column(Integer, default=0)
-	api_usage_limit = Column(Integer, default=10)  # Free tier limit
 	# Relationship to analysis results
 	analyses = relationship("EmailAnalysis", back_populates="user")
+
+	# Add these fields for Paddle integration
+	is_subscribed = Column(Boolean, default=False)
+	subscription_id = Column(String, nullable=True)
+	subscription_plan_id = Column(String, nullable=True)
+	subscription_status = Column(String, nullable=True)  # active, cancelled, paused
+	subscription_start_date = Column(DateTime, nullable=True)
+	subscription_end_date = Column(DateTime, nullable=True)
 
 # SQLAlchemy EmailAnalysis model
 class EmailAnalysis(Base):
@@ -62,3 +64,7 @@ class EmailAnalysisRead(BaseModel):
 	analyzed_at: datetime
 	class Config:
 		from_attributes = True
+
+# Add this class for email text analysis
+class EmailText(BaseModel):
+    email_text: str

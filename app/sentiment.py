@@ -4,6 +4,7 @@ from app.dependencies import get_current_user
 from app import models, database
 import openai
 import os
+from app.middleware import verify_subscription
 
 router = APIRouter()
 
@@ -20,24 +21,13 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 @router.post("/analyze")
 def analyze_email(
-    analysis: models.EmailAnalysisCreate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    email_text: models.EmailText, 
+    db: Session = Depends(get_db), 
+    current_user = Depends(verify_subscription)  # Changed from auth.get_current_user
 ):
-    # Check usage limits for non-premium users
-    if not current_user.is_premium:
-        if current_user.api_usage_count >= current_user.api_usage_limit:
-            raise HTTPException(
-                status_code=429,
-                detail="API usage limit reached. Please upgrade to premium for unlimited access."
-            )
-
-    # Increment usage counter
-    current_user.api_usage_count += 1
-    db.commit()
     # Call OpenAI API for sentiment and tone analysis
     try:
-        prompt = f"Analyze the following email for sentiment and tone. Return both as short labels.\n\nEmail:\n{analysis.email_text}"
+        prompt = f"Analyze the following email for sentiment and tone. Return both as short labels.\n\nEmail:\n{email_text}"
         client = openai.OpenAI()
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -56,7 +46,7 @@ def analyze_email(
         # Store in DB
         db_analysis = models.EmailAnalysis(
             user_id=current_user.id if hasattr(current_user, 'id') else None,
-            email_text=analysis.email_text,
+            email_text=email_text,
             sentiment=sentiment,
             tone=tone
         )
