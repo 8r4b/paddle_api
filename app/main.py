@@ -1,8 +1,17 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException, Depends
 from app import models, database
 from app.users import router as users_router
 from app.sentiment import router as sentiment_router
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+import hashlib
+import hmac
+import os
+import base64
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.backends import default_backend
 
 # Create database tables
 models.Base.metadata.create_all(bind=database.engine)
@@ -37,3 +46,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Dependency to get DB session
+def get_db():
+    db = database.SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Paddle Webhook Endpoint
