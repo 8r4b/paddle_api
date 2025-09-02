@@ -17,6 +17,12 @@ class User(Base):
 	is_verified = Column(Boolean, default=False)
 	verification_code = Column(String(255), nullable=True)
 	verification_token = Column(String(255), nullable=True)
+	# Paddle subscription fields
+	subscription_id = Column(String, nullable=True)
+	subscription_status = Column(String, default="inactive")
+	is_premium = Column(Boolean, default=False)
+	api_usage_count = Column(Integer, default=0)
+	api_usage_limit = Column(Integer, default=10)  # Free tier limit
 	# Relationship to analysis results
 	analyses = relationship("EmailAnalysis", back_populates="user")
 

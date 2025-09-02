@@ -24,6 +24,17 @@ def analyze_email(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
+    # Check usage limits for non-premium users
+    if not current_user.is_premium:
+        if current_user.api_usage_count >= current_user.api_usage_limit:
+            raise HTTPException(
+                status_code=429,
+                detail="API usage limit reached. Please upgrade to premium for unlimited access."
+            )
+
+    # Increment usage counter
+    current_user.api_usage_count += 1
+    db.commit()
     # Call OpenAI API for sentiment and tone analysis
     try:
         prompt = f"Analyze the following email for sentiment and tone. Return both as short labels.\n\nEmail:\n{analysis.email_text}"

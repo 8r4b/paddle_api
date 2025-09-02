@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from app import models, auth, database
 from app.models import UserCreate, UserRead
+from app.dependencies import get_current_user
 from fastapi.security import OAuth2PasswordRequestForm
 import secrets
 import smtplib
@@ -125,3 +126,52 @@ def reset_password(token: str, new_password: str, db: Session = Depends(get_db))
     user.verification_token = None
     db.commit()
     return {"message": "Password reset successful"}
+
+@router.get("/subscription/status")
+def get_subscription_status(current_user: models.User = Depends(get_current_user)):
+    """Get current user's subscription status"""
+    return {
+        "is_premium": current_user.is_premium,
+        "subscription_status": current_user.subscription_status,
+        "api_usage_count": current_user.api_usage_count,
+        "api_usage_limit": current_user.api_usage_limit
+    }
+
+@router.post("/subscription/create-checkout")
+def create_checkout_session(current_user: models.User = Depends(get_current_user)):
+    """Create Paddle checkout session"""
+    # You'll need to configure these with your actual Paddle product IDs
+    paddle_vendor_id = os.getenv("PADDLE_VENDOR_ID")
+    paddle_product_id = os.getenv("PADDLE_PRODUCT_ID")
+    
+    if not paddle_vendor_id or not paddle_product_id:
+        raise HTTPException(status_code=500, detail="Paddle configuration missing")
+    
+    # Return checkout URL - you can customize this based on your pricing
+    checkout_url = f"https://buy.paddle.com/product/{paddle_product_id}"
+    
+    return {
+        "checkout_url": checkout_url,
+        "customer_email": current_user.email,
+        "user_id": current_user.id
+    }
+
+@router.get("/pricing")
+def get_pricing():
+    """Get available pricing plans"""
+    return {
+        "plans": [
+            {
+                "name": "Free",
+                "price": 0,
+                "api_calls": 10,
+                "features": ["Basic sentiment analysis", "Email verification"]
+            },
+            {
+                "name": "Premium",
+                "price": 9.99,
+                "api_calls": "unlimited",
+                "features": ["Unlimited sentiment analysis", "Advanced tone analysis", "Priority support"]
+            }
+        ]
+    }
