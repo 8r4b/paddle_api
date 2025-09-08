@@ -148,17 +148,14 @@ def get_subscription_status(db: Session = Depends(get_db), current_user = Depend
 
 @router.get("/checkout")
 def get_checkout_url(db: Session = Depends(get_db), current_user = Depends(auth.get_current_user)):
-    import httpx
-    import json
-    
-    # For Paddle V2, we need to use the price ID, not the product ID
+    # Get your price ID from environment variables
     price_id = os.getenv("PADDLE_PRICE_ID")
     
-    # Use direct checkout link for Paddle V2
-    checkout_url = f"https://buy.paddle.com/pay/{price_id}?email={current_user.email}"
+    # Base checkout URL
+    base_url = "https://pay.paddle.io/hsc_01k45ywftb2yfkcvy18p5tz59n_kqyt17mg7czmc7b2smpbhsgwk2vc82by"
     
-    # For sandbox testing
-    # checkout_url = f"https://sandbox-buy.paddle.com/pay/{price_id}?email={current_user.email}"
+    # Add required query parameters
+    checkout_url = f"{base_url}?price_id={price_id}&email={current_user.email}"
     
-    print(f"Generated checkout URL: {checkout_url}")
+    print(f"Using Paddle checkout URL: {checkout_url}")
     return {"checkout_url": checkout_url}

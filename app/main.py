@@ -5,8 +5,6 @@ from app.sentiment import router as sentiment_router
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import os
-import hmac
-import hashlib
 from datetime import datetime
 from app.database import engine
 
@@ -26,11 +24,12 @@ def read_root():
         "version": "1.0.0",
         "endpoints": {
             "register": "/users/register",
-            "login": "/users/token",
+            "login": "/users/loging",
             "verify": "/users/verify",
             "analyze": "/sentiment/analyze"
         }
     }
+
 # Include routers
 app.include_router(users_router, prefix="/users", tags=["users"])
 app.include_router(sentiment_router, prefix="/sentiment", tags=["sentiment"])
@@ -52,26 +51,25 @@ def get_db():
     finally:
         db.close()
 
-# Paddle Webhook Endpoint
-@app.post("/webhooks/paddle")
-async def paddle_webhook(request: Request, db: Session = Depends(database.get_db)):
+# Paddle Webhook Endpoint (Classic and V2 support)
+@app.post("/users/paddle/webhook")
+async def paddle_webhook(request: Request, db: Session = Depends(get_db)):
     try:
         data = await request.json()
-        
-        # For Paddle's new API, authentication is done via API key
-        # No signature verification needed as in the classic API
-        
-        # Log the webhook data for debugging
         print(f"Received Paddle webhook: {data}")
-        
+
+        # Classic Paddle webhooks use 'alert_name'
         alert_name = data.get("alert_name")
-        
-        if alert_name == "subscription_created":
-            # Handle new subscription
+        # Paddle V2 webhooks use 'event_type'
+        event_type = data.get("event_type")
+
+        # Use whichever is present
+        event = alert_name or event_type
+
+        if event == "subscription_created":
             user_email = data.get("email")
             subscription_id = data.get("subscription_id")
             plan_id = data.get("plan_id")
-            
             user = db.query(models.User).filter(models.User.email == user_email).first()
             if user:
                 user.is_subscribed = True
@@ -81,31 +79,28 @@ async def paddle_webhook(request: Request, db: Session = Depends(database.get_db
                 user.subscription_start_date = datetime.now()
                 db.commit()
                 print(f"User {user.username} subscription activated")
-            
-        elif alert_name == "subscription_cancelled":
+
+        elif event == "subscription_cancelled":
             subscription_id = data.get("subscription_id")
-            
             user = db.query(models.User).filter(models.User.subscription_id == subscription_id).first()
             if user:
                 user.subscription_status = "cancelled"
                 user.subscription_end_date = datetime.now()
                 db.commit()
                 print(f"User {user.username} subscription cancelled")
-                
-        elif alert_name == "subscription_payment_succeeded":
-            # Handle successful payment
+
+        elif event == "subscription_payment_succeeded":
             subscription_id = data.get("subscription_id")
-            
             user = db.query(models.User).filter(models.User.subscription_id == subscription_id).first()
             if user:
-                # Extend subscription end date if needed
-                # This depends on your subscription model
                 print(f"Payment succeeded for user {user.username}")
-                
-        # Return 200 OK to acknowledge receipt
+
+        # Add more event handling as needed
+
         return {"status": "success"}
-        
+
     except Exception as e:
         print(f"Error processing webhook: {str(e)}")
         # Still return 200 to prevent Paddle from retrying
         return {"status": "error", "message": str(e)}
+
