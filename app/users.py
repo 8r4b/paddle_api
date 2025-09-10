@@ -9,6 +9,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 from dotenv import load_dotenv
+import httpx
+import json
 
 # Load environment variables at the beginning
 load_dotenv()
@@ -147,18 +149,48 @@ def get_subscription_status(db: Session = Depends(get_db), current_user = Depend
     }
 
 @router.get("/checkout")
-def get_checkout_url(db: Session = Depends(get_db), current_user = Depends(auth.get_current_user)):
-    import httpx
-    import json
-    
-    # For Paddle V2, we need to use the price ID, not the product ID
+async def get_checkout_url(db: Session = Depends(get_db), current_user = Depends(auth.get_current_user)):
+    """
+    Creates a checkout session directly via the Paddle API.
+    This is the most reliable method for both sandbox and production.
+    """
+    api_key = os.getenv("PADDLE_PUBLIC_KEY")
     price_id = os.getenv("PADDLE_PRICE_ID")
-    
-    # Use direct checkout link for Paddle V2
-    checkout_url = f"https://buy.paddle.com/pay/{price_id}?email={current_user.email}"
-    
-    # For sandbox testing
-    # checkout_url = f"https://sandbox-buy.paddle.com/pay/{price_id}?email={current_user.email}"
-    
-    print(f"Generated checkout URL: {checkout_url}")
-    return {"checkout_url": checkout_url}
+
+    if not api_key or not price_id:
+        raise HTTPException(status_code=500, detail="Paddle API Key or Price ID is not configured.")
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "items": [{"price_id": price_id, "quantity": 1}],
+        "customer": {"email": current_user.email},
+        "custom_data": {
+            "user_id": str(current_user.id),
+            "username": current_user.username
+        }
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            # This URL correctly points to the Paddle Sandbox API
+            response = await client.post("https://sandbox-api.paddle.com/transactions", headers=headers, json=payload)
+
+            if response.status_code == 201:  # Success
+                response_data = response.json()
+                checkout_url = response_data.get("data", {}).get("checkout", {}).get("url")
+                if not checkout_url:
+                     raise HTTPException(status_code=500, detail="Could not retrieve checkout URL from payment provider.")
+                return {"checkout_url": checkout_url}
+            else:
+                # This part gives us specific errors if something is wrong
+                error_details = response.json()
+                error_message = error_details.get('error', {}).get('detail', 'Unknown Paddle error')
+                print(f"PADDLE API FAILED: Status: {response.status_code}, Details: {json.dumps(error_details, indent=2)}")
+                raise HTTPException(status_code=500, detail=f"Paddle Error: {error_message}")
+
+    except httpx.RequestError as e:
+        print(f"Could not connect to Paddle API. Error: {e}")
+        raise HTTPException(status_code=503, detail="Service Unavailable: Could not connect to payment provider.")

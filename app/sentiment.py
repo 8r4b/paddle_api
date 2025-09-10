@@ -27,7 +27,8 @@ def analyze_email(
 ):
     # Call OpenAI API for sentiment and tone analysis
     try:
-        prompt = f"Analyze the following email for sentiment and tone. Return both as short labels.\n\nEmail:\n{email_text}"
+        # FIX 1: Use the string content from the Pydantic model for the prompt
+        prompt = f"Analyze the following email for sentiment and tone. Return both as short labels.\n\nEmail:\n{email_text.email_text}"
         client = openai.OpenAI()
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -46,7 +47,8 @@ def analyze_email(
         # Store in DB
         db_analysis = models.EmailAnalysis(
             user_id=current_user.id if hasattr(current_user, 'id') else None,
-            email_text=email_text,
+            # FIX 2: Use the string content from the Pydantic model for the database
+            email_text=email_text.email_text,
             sentiment=sentiment,
             tone=tone
         )
