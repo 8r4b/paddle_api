@@ -154,7 +154,8 @@ async def get_checkout_url(db: Session = Depends(get_db), current_user = Depends
     Creates a checkout session directly via the Paddle API.
     This is the most reliable method for both sandbox and production.
     """
-    api_key = os.getenv("PADDLE_PUBLIC_KEY")
+    # THE FIX IS HERE: Add .strip() to remove any accidental whitespace
+    api_key = os.getenv("PADDLE_PUBLIC_KEY").strip()
     price_id = os.getenv("PADDLE_PRICE_ID")
 
     if not api_key or not price_id:
